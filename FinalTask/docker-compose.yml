@@ -1,0 +1,48 @@
+services:
+  db:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=YourPassword123!
+      - MYSQL_DATABASE=scores_db
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: on-failure
+
+  migrations:
+    build: ./db
+    command: sh -c "sleep 5 && python migrations.py && tail -f /dev/null"
+    environment:
+      - DATABASE_HOST=db
+      - DATABASE_USER=root
+      - DATABASE_PASSWORD=YourPassword123!
+      - DATABASE_NAME=scores_db
+    depends_on:
+      - db
+    restart: always #on-failure
+
+  backend:
+    build: ./backend
+    #command: python manage.py runserver 0.0.0.0:8000
+    #volumes:
+    #  - .:/backend
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_HOST=db
+      - DATABASE_USER=root
+      - DATABASE_PASSWORD=YourPassword123!
+      - DATABASE_NAME=scores_db
+    depends_on:
+      - db
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: react_app
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend

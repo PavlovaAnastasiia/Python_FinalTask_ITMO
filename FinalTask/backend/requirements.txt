@@ -1,0 +1,7 @@
+Flask
+Flask-SQLAlchemy
+PyMySQL
+cryptography
+flask-cors
+Flask-JWT-Extended
+geopy
