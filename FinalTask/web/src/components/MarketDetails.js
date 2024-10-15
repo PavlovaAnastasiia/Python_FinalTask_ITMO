@@ -158,7 +158,6 @@ const MarketDetails = () => {
             name="text"
             value={newReview.text}
             onChange={handleReviewChange}
-            required
           />
         </div>
         {errorMessage && <p style={{ color: 'red' }}>{errorMessage}</p>}

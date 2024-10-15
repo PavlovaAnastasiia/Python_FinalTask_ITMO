@@ -10,13 +10,17 @@ const MarketList = () => {
     postal_code: '',
     radius: 30, // Default to 30 miles
   });
-  const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({
+    name: null, // No sorting by default
+    city: null,
+    state: null,
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10); // Number of markets per page
   const [totalPages, setTotalPages] = useState(1); // Total number of pages
 
   useEffect(() => {
-    fetchMarkets(); // Fetch markets only when search parameters or sort config changes
+    fetchMarkets(); // Fetch markets when search params, sort config, page or pageSize changes
   }, [searchParams, sortConfig, currentPage, pageSize]);
 
   const fetchMarkets = async () => {
@@ -25,7 +29,11 @@ const MarketList = () => {
       window.location.href = '/login';
       return;
     }
-  
+
+    // Prepare the sorting query params
+    const sortKeys = Object.keys(sortConfig).filter(key => sortConfig[key] !== null);
+    const sortDirections = sortKeys.map(key => sortConfig[key]);
+
     try {
       const response = await axios.get('http://localhost:5000/markets', {
         headers: {
@@ -33,8 +41,8 @@ const MarketList = () => {
         },
         params: {
           ...searchParams,
-          sort_key: sortConfig.key,
-          sort_direction: sortConfig.direction,
+          sort_key: sortKeys.join(','), // Send as a comma-separated list
+          sort_direction: sortDirections.join(','), // Send as a comma-separated list
           page: currentPage,
           page_size: pageSize,
         },
@@ -42,7 +50,6 @@ const MarketList = () => {
       setMarkets(response.data.markets);
       setTotalPages(response.data.total_pages); // Update total pages based on backend response
     } catch (error) {
-      // Check if the error is an authorization error (401 or 403)
       if (error.response && (error.response.status === 401 || error.response.status === 403)) {
         console.error('Authorization error, logging out');
         handleLogout(); // Log out user on auth error
@@ -65,6 +72,29 @@ const MarketList = () => {
     }));
   };
 
+  const handleSortChange = (key, value) => {
+    setSortConfig((prevSortConfig) => ({
+      ...prevSortConfig,
+      [key]: value,
+    }));
+  };
+
+  const resetFilters = () => {
+    setSearchParams({
+      city: '',
+      state: '',
+      postal_code: '',
+      radius: 30,
+    });
+    setSortConfig({
+      name: null,
+      city: null,
+      state: null,
+    });
+    setCurrentPage(1);
+    fetchMarkets();
+  };
+
   const deleteMarket = async (marketId) => {
     try {
       const token = localStorage.getItem('access_token');
@@ -77,14 +107,6 @@ const MarketList = () => {
     } catch (error) {
       console.error('Failed to delete market', error);
     }
-  };
-
-  const handleSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
   };
 
   const handlePageChange = (newPage) => {
@@ -104,6 +126,7 @@ const MarketList = () => {
       <button onClick={handleLogout}>Logout</button>
 
       <div>
+        <h3>Search</h3>
         <input
           type="text"
           name="city"
@@ -132,18 +155,50 @@ const MarketList = () => {
           onChange={handleInputChange}
           placeholder="Radius (miles)"
         />
-        <button onClick={handleSearch}>Search</button>
+        <button
+          onClick={handleSearch}
+          style={{ display: 'none' }} // This will completely remove it from the layout
+        >
+          Search
+        </button>
+        <button onClick={resetFilters}>Reset</button>
       </div>
 
       <table>
         <thead>
           <tr>
-            <th onClick={() => handleSort('id')}>ID</th>
-            <th onClick={() => handleSort('name')}>Name</th>
-            <th onClick={() => handleSort('city')}>City</th>
-            <th onClick={() => handleSort('state')}>State</th>
+            <th>
+              Name
+              <div>
+                <select value={sortConfig.name || ''} onChange={(e) => handleSortChange('name', e.target.value)}>
+                  <option value="">Sort</option>
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </div>
+            </th>
+            <th>
+              City
+              <div>
+                <select value={sortConfig.city || ''} onChange={(e) => handleSortChange('city', e.target.value)}>
+                  <option value="">Sort</option>
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </div>
+            </th>
+            <th>
+              State
+              <div>
+                <select value={sortConfig.state || ''} onChange={(e) => handleSortChange('state', e.target.value)}>
+                  <option value="">Sort</option>
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </div>
+            </th>
             <th>Postal Code</th>
-            <th onClick={() => handleSort('average_ranking')}>Ranking</th> {/* New column for ranking */}
+            <th>Ranking</th>
             <th>Details</th>
             <th>Actions</th>
           </tr>
@@ -151,12 +206,11 @@ const MarketList = () => {
         <tbody>
           {markets.map((market) => (
             <tr key={market.id}>
-              <td>{market.id}</td>
               <td>{market.name}</td>
               <td>{market.city}</td>
               <td>{market.state}</td>
               <td>{market.postal_code}</td>
-              <td>{market.average_ranking ? market.average_ranking.toFixed(1) : '0'}</td> {/* Handle missing ranking */}
+              <td>{market.average_ranking ? market.average_ranking.toFixed(1) : '0'}</td>
               <td>
                 <Link to={`/markets/${market.id}`}>View Details</Link>
               </td>

@@ -86,8 +86,10 @@ def get_markets():
     radius = request.args.get('radius', type=float, default=30)  # Default to 30 miles
     user_latitude = request.args.get('latitude', type=float)
     user_longitude = request.args.get('longitude', type=float)
-    sort_key = request.args.get('sort_key', 'id')  # Default sort by ID
-    sort_direction = request.args.get('sort_direction', 'asc')
+
+    # Get sort keys and directions
+    sort_keys = request.args.get('sort_key', '').split(',')  # Default to empty if not provided
+    sort_directions = request.args.get('sort_direction', 'asc').split(',')  # Default to 'asc' if not provided
     page = request.args.get('page', type=int, default=1)  # Current page
     page_size = request.args.get('page_size', type=int, default=10)  # Results per page
 
@@ -119,10 +121,7 @@ def get_markets():
     market_data = []
     for market in markets:
         reviews = Review.query.filter_by(market_id=market.id).all()
-        if reviews:
-            average_ranking = sum([review.score for review in reviews]) / len(reviews)
-        else:
-            average_ranking = 0  # No reviews, so average ranking is 0
+        average_ranking = sum(review.score for review in reviews) / len(reviews) if reviews else 0
 
         market_data.append({
             'id': market.id,
@@ -132,14 +131,32 @@ def get_markets():
             'postal_code': market.postal_code,
             'latitude': market.latitude,
             'longitude': market.longitude,
-            'average_ranking': average_ranking  # Add average ranking to market data
+            'average_ranking': average_ranking
         })
 
-    # Apply sorting for average_ranking or other fields
-    if sort_key == 'average_ranking':
-        market_data.sort(key=lambda x: x['average_ranking'], reverse=(sort_direction == 'desc'))
-    else:
-        market_data.sort(key=lambda x: x[sort_key], reverse=(sort_direction == 'desc'))
+    # Create a list of sorting lambdas for multiple sort keys
+    def multi_sort(market):
+        sort_values = []
+
+        # First, sort by average ranking in descending order
+        sort_values.append(-market['average_ranking'])  # Always descending
+
+        # Add other sorting keys
+        for i, key in enumerate(sort_keys):
+            reverse = (sort_directions[i].strip().lower() == 'desc') if i < len(sort_directions) else False
+            
+            # Handle string and numeric sorting
+            sort_value = market.get(key, None)  # Use None if key doesn't exist
+            
+            if isinstance(sort_value, (int, float)):  # Numeric handling
+                sort_values.append(-sort_value if reverse else sort_value)
+            elif isinstance(sort_value, str):  # String handling
+                sort_values.append(sort_value if not reverse else sort_value[::-1])  # Reverse the string for descending order
+
+        return tuple(sort_values)
+
+    # Sort the data based on average ranking first (descending), then by other keys
+    market_data.sort(key=multi_sort)
 
     # Paginate the sorted market data
     total_markets = len(market_data)
@@ -150,7 +167,6 @@ def get_markets():
         'markets': paginated_data,
         'total_pages': total_pages
     }), 200
-
 
 
 # Endpoint to fetch a specific market by ID
